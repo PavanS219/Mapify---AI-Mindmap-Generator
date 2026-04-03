@@ -3,37 +3,58 @@ interface MindMapNode {
   subtopics?: MindMapNode[];
 }
 
-async function callGroq(systemPrompt: string, userPrompt: string): Promise<MindMapNode> {
-  const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+async function callMiniMax(systemPrompt: string, userPrompt: string): Promise<MindMapNode> {
+  const apiKey = import.meta.env.VITE_MINIMAX_API_KEY;
 
   if (!apiKey) {
-    console.warn('No GROQ API key found');
+    console.warn('No MiniMax API key found');
     throw new Error('No API key');
   }
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetch('https://api.minimax.chat/v1/text/chatcompletion_v2', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'abab6.5-chat',
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
+        {
+          sender_type: 'SYSTEM',
+          text: systemPrompt
+        },
+        {
+          sender_type: 'USER',
+          text: userPrompt
+        }
       ],
       temperature: 0.8,
-      max_tokens: 2048,
+      max_tokens: 2048
     })
   });
 
-  if (!response.ok) throw new Error(`Groq error: ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`MiniMax error: ${response.status}`);
+  }
 
   const data = await response.json();
-  const content = data.choices[0].message.content.trim();
+
+  let content = data.reply?.trim();
+
+  if (!content) {
+    throw new Error('Empty response from MiniMax');
+  }
+
+  // Clean markdown if model adds it
   const clean = content.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+
+  try {
+    return JSON.parse(clean);
+  } catch (err) {
+    console.error("JSON Parse Failed. Raw output:", clean);
+    throw new Error("Invalid JSON from MiniMax");
+  }
 }
 
 const SYSTEM_PROMPT = `You are a mind map generator. Return ONLY valid JSON, no markdown, no backticks, no explanation.
@@ -54,17 +75,25 @@ Rules:
 
 export async function generateMindMap(topic: string): Promise<MindMapNode> {
   try {
-    return await callGroq(SYSTEM_PROMPT, `Generate a detailed mind map for: "${topic}". Make every node specific and unique.`);
-  } catch {
+    return await callMiniMax(
+      SYSTEM_PROMPT,
+      `Generate a detailed mind map for: "${topic}". Make every node specific and unique.`
+    );
+  } catch (err) {
+    console.warn("Fallback triggered (generateMindMap):", err);
     return getFallback(topic);
   }
 }
 
-// ✨ NEW — expands a single node deeper on click
+// ✨ Expand node dynamically
 export async function expandNode(label: string): Promise<MindMapNode> {
   try {
-    return await callGroq(EXPAND_PROMPT, `Expand this mind map node with deep, specific subtopics: "${label}"`);
-  } catch {
+    return await callMiniMax(
+      EXPAND_PROMPT,
+      `Expand this mind map node with deep, specific subtopics: "${label}"`
+    );
+  } catch (err) {
+    console.warn("Fallback triggered (expandNode):", err);
     return {
       label,
       subtopics: [
@@ -77,14 +106,39 @@ export async function expandNode(label: string): Promise<MindMapNode> {
   }
 }
 
+// 🔁 Backup if API fails
 function getFallback(topic: string): MindMapNode {
   return {
     label: topic,
     subtopics: [
-      { label: 'Core Concepts', subtopics: [{ label: 'Fundamentals' }, { label: 'Key Principles' }] },
-      { label: 'Applications', subtopics: [{ label: 'Real-world Use' }, { label: 'Case Studies' }] },
-      { label: 'Tools & Methods', subtopics: [{ label: 'Popular Tools' }, { label: 'Best Practices' }] },
-      { label: 'Future Trends', subtopics: [{ label: 'Emerging Ideas' }, { label: 'Research Areas' }] },
+      {
+        label: 'Core Concepts',
+        subtopics: [
+          { label: 'Fundamentals' },
+          { label: 'Key Principles' }
+        ]
+      },
+      {
+        label: 'Applications',
+        subtopics: [
+          { label: 'Real-world Use' },
+          { label: 'Case Studies' }
+        ]
+      },
+      {
+        label: 'Tools & Methods',
+        subtopics: [
+          { label: 'Popular Tools' },
+          { label: 'Best Practices' }
+        ]
+      },
+      {
+        label: 'Future Trends',
+        subtopics: [
+          { label: 'Emerging Ideas' },
+          { label: 'Research Areas' }
+        ]
+      }
     ]
   };
 }
