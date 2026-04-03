@@ -2,7 +2,8 @@
 
 > *Turn any idea into an infinite, interactive mind map — powered by MiniMax AI.*
 
-![Mapify Screenshot](./screenshot.png)
+<img width="1919" height="1079" alt="Screenshot 2026-04-04 041545" src="https://github.com/user-attachments/assets/4ad5127e-9b2c-4ce2-abdd-6ce32790c34c" />
+
 
 ---
 
